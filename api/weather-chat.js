@@ -1,6 +1,27 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ reply: "Method not allowed." });
+  }
+
   try {
-    const { messages } = req.body;
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ reply: "Missing OpenAI API key in Vercel." });
+    }
+
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const messages = body && body.messages ? body.messages : [];
+
+    const userText = messages
+      .map(m => `${m.role}: ${m.content}`)
+      .join("\n");
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -10,18 +31,26 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-5.4-mini",
-        input: messages.map(m => m.content).join("\n"),
-        instructions: "You are a weather assistant. ONLY answer weather questions."
+        instructions:
+          "You are a weather assistant. Only answer weather questions.",
+        input: userText
       })
     });
 
     const data = await response.json();
 
-    res.status(200).json({
-      reply: data.output_text || "No weather response."
-    });
+    if (!response.ok) {
+      return res.status(500).json({
+        reply: data?.error?.message || "OpenAI failed."
+      });
+    }
+
+    const reply = data.output_text || "No response.";
+    return res.status(200).json({ reply });
 
   } catch (error) {
-    res.status(500).json({ reply: "Error" });
+    return res.status(500).json({
+      reply: "Server error."
+    });
   }
-}
+};

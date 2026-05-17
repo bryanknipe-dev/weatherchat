@@ -43,7 +43,7 @@ module.exports = async function handler(req, res) {
     );
 
     res.status(200).json({
-      events: allEvents.slice
+      events: allEvents
     });
 
   } catch (error) {
